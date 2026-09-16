@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hand Tracker</title>
+<meta name="description" content="A distributed hand tracking system streaming camera frames from a Raspberry Pi 4 to a MediaPipe server, driving two servos to physically track hands in real time.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>\\u25b2</text></svg>">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0f172a;
+  --bg-raised:#1e293b;
+  --bg-code:#0c1222;
+  --border:rgba(255,255,255,0.08);
+  --border-strong:rgba(255,255,255,0.14);
+  --text:#f8fafc;
+  --text-muted:#94a3b8;
+  --text-dim:#64748b;
+  --accent:#3b82f6;
+  --accent-hover:#60a5fa;
+  --green:#22c55e;
+  --font-sans:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  --font-mono:'SF Mono','Cascadia Code','Fira Code',Consolas,'Courier New',monospace;
+  --max-w:1080px;
+  --section-gap:8rem;
+}
+
+html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden}
+
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent-hover)}
+
+::selection{background:var(--accent);color:#fff}
+
+.container{max-width:var(--max-w);margin:0 auto;padding:0 2rem}
+
+/* ---- NAV ---- */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(15,23,42,0.82);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+nav .nav-inner{max-width:var(--max-w);margin:0 auto;padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:56px}
+nav .logo{font-family:var(--font-mono);font-size:0.9rem;font-weight:600;color:var(--text);letter-spacing:-0.02em}
+nav .links{display:flex;gap:1.75rem}
+nav .links a{font-size:0.8rem;color:var(--text-muted);letter-spacing:0.01em;transition:color 0.15s}
+nav .links a:hover{color:var(--text)}
+
+/* ---- HERO ---- */
+.hero{padding-top:calc(56px + 6rem);padding-bottom:var(--section-gap)}
+.hero h1{font-size:clamp(2.2rem,5.5vw,3.4rem);font-weight:700;letter-spacing:-0.03em;line-height:1.1;margin-bottom:1.25rem;max-width:750px}
+.hero .sub{font-size:1.05rem;color:var(--text-muted);max-width:600px;line-height:1.7;margin-bottom:2.5rem}
+.hero .cta-row{display:flex;gap:0.75rem;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:0.5rem;font-size:0.85rem;font-weight:500;padding:0.6rem 1.25rem;border-radius:6px;border:1px solid var(--border-strong);background:var(--bg-raised);color:var(--text);transition:background 0.15s,border-color 0.15s;cursor:pointer;font-family:var(--font-sans)}
+.btn:hover{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.2)}
+.btn svg{width:16px;height:16px;opacity:0.7}
+.btn-accent{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-accent:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+
+/* ---- DEMO VIDEO ---- */
+.demo{margin-top:3rem;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden;max-width:720px;background:#000;position:relative}
+.demo video{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;cursor:pointer}
+.demo .controls{position:absolute;bottom:0;left:0;right:0;display:flex;align-items:center;gap:0.75rem;padding:0.6rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,0.7));opacity:0;transition:opacity 0.2s}
+.demo:hover .controls{opacity:1}
+.demo .play-btn{background:none;border:none;color:#fff;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center}
+.demo .play-btn svg{width:22px;height:22px}
+.demo .timeline{flex:1;height:4px;background:rgba(255,255,255,0.25);border-radius:2px;cursor:pointer;position:relative}
+.demo .timeline .filled{height:100%;background:var(--accent);border-radius:2px;width:0%}
+.demo .time{font-family:var(--font-mono);font-size:0.7rem;color:rgba(255,255,255,0.8);white-space:nowrap;min-width:70px;text-align:right}
+
+/* ---- SECTIONS ---- */
+section{padding:var(--section-gap) 0}
+.section-label{font-family:var(--font-mono);font-size:0.7rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:0.75rem}
+section h2{font-size:1.65rem;font-weight:600;letter-spacing:-0.02em;margin-bottom:0.75rem}
+section .desc{color:var(--text-muted);max-width:560px;line-height:1.7;margin-bottom:2.5rem;font-size:0.95rem}
+
+/* ---- FLOW ---- */
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.flow-step{background:var(--bg);padding:1.5rem 1.25rem;position:relative}
+.flow-step .step-num{font-family:var(--font-mono);font-size:0.65rem;color:var(--accent);margin-bottom:0.6rem;letter-spacing:0.04em}
+.flow-step h3{font-size:0.9rem;font-weight:600;margin-bottom:0.4rem}
+.flow-step p{font-size:0.78rem;color:var(--text-muted);line-height:1.55}
+.flow-arrow{position:absolute;right:-0.5rem;top:50%;transform:translateY(-50%);font-size:0.7rem;color:var(--text-dim);z-index:1}
+
+/* ---- SPECS ---- */
+.specs{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.spec-card{background:var(--bg);padding:1.5rem 1.25rem}
+.spec-card .icon{width:32px;height:32px;border-radius:6px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.15);display:flex;align-items:center;justify-content:center;margin-bottom:1rem}
+.spec-card .icon svg{width:16px;height:16px;color:var(--accent)}
+.spec-card h3{font-size:0.9rem;font-weight:600;margin-bottom:0.35rem}
+.spec-card p{font-size:0.78rem;color:var(--text-muted);line-height:1.55}
+
+/* ---- REPOS ---- */
+.repos{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.repo-card{background:var(--bg);padding:1.5rem;display:flex;flex-direction:column}
+.repo-card .repo-name{font-family:var(--font-mono);font-size:0.85rem;font-weight:600;margin-bottom:0.35rem}
+.repo-card p{font-size:0.78rem;color:var(--text-muted);line-height:1.55;flex:1;margin-bottom:1rem}
+.repo-card .repo-link{font-size:0.78rem;color:var(--accent);display:inline-flex;align-items:center;gap:0.3rem;transition:color 0.15s}
+.repo-card .repo-link:hover{color:var(--accent-hover)}
+
+/* ---- FOOTER ---- */
+footer{border-top:1px solid var(--border);padding:2.5rem 0}
+.footer-inner{display:flex;justify-content:space-between;align-items:center;max-width:var(--max-w);margin:0 auto;padding:0 2rem}
+footer p{font-size:0.75rem;color:var(--text-dim)}
+footer .links{display:flex;gap:1.5rem}
+footer .links a{font-size:0.75rem;color:var(--text-dim);transition:color 0.15s}
+footer .links a:hover{color:var(--text-muted)}
+
+/* ---- DIVIDER ---- */
+.divider{height:1px;background:var(--border);max-width:var(--max-w);margin:0 auto}
+
+/* ---- RESPONSIVE ---- */
+@media(max-width:768px){
+  :root{--section-gap:5rem}
+  .flow,.specs,.repos{grid-template-columns:1fr}
+  .flow-arrow{display:none}
+  .hero h1{font-size:1.8rem}
+  nav .links{gap:1rem}
+  nav .links a{font-size:0.72rem}
+  .footer-inner{flex-direction:column;gap:1rem;text-align:center}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="logo">hand-tracker</a>
+    <div class="links">
+      <a href="#architecture">Architecture</a>
+      <a href="#specs">Specs</a>
+      <a href="#repositories">Repos</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero container">
+  <h1>Hand Tracker</h1>
+  <p class="sub">It tracks your hand in real time and mimics your movements with two servo motors. A Raspberry Pi streams the video to your PC where MediaPipe calculates your hand position and the coordinates are sent right back to the Rasperry PI where it moves the two servos.</p>
+  <div class="cta-row">
+    <a href="https://github.com/javinwittig/hand_tracker" target="_blank" rel="noopener noreferrer" class="btn btn-accent">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      View Raspberry Pi Code
+    </a>
+    <a href="https://github.com/javinwittig/hantracking_server" target="_blank" rel="noopener noreferrer" class="btn">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      View PC Server Code
+    </a>
+  </div>
+
+  <!-- DEMO VIDEO -->
+  <div class="demo">
+    <video src="demo.mp4" preload="metadata" playsinline></video>
+    <div class="controls">
+      <button class="play-btn" aria-label="Play">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>
+      </button>
+      <div class="timeline"><div class="filled"></div></div>
+      <span class="time">0:00 / 0:00</span>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ARCHITECTURE -->
+<section id="architecture" class="container">
+
+  <h2>How it works</h2>
+  <p class="desc">The Raspberry Pi captures the video and controls the two servo motors. A separate PC runs MediaPiPe hand detection.</p>
+
+  <div class="flow">
+    <div class="flow-step">
+      <span class="step-num">01</span>
+      <h3>Frame Capture</h3>
+      <p>rpicam-vid captures video  on the Pi.</p>
+      <span class="flow-arrow">&rarr;</span>
+    </div>
+    <div class="flow-step">
+      <span class="step-num">02</span>
+      <h3>HTTP Stream</h3>
+      <p>Frames are sent over HTTP to the server on your PC.</p>
+      <span class="flow-arrow">&rarr;</span>
+    </div>
+    <div class="flow-step">
+      <span class="step-num">03</span>
+      <h3>MediaPipe Inference</h3>
+      <p>HandLandmarker detects the hand position and calculates the coordinates</p>
+      <span class="flow-arrow">&rarr;</span>
+    </div>
+    <div class="flow-step">
+      <span class="step-num">04</span>
+      <h3>Servo Actuation</h3>
+      <p>The Pi receives the coordinates and drives two servos via GPIO.</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- HARDWARE -->
+<section id="specs" class="container">
+
+  <h2>Hardware</h2>
+  <p class="desc">The physical components that make up the tracking system.</p>
+
+  <div class="specs">
+    <div class="spec-card">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
+      </div>
+      <h3>Raspberry Pi 4</h3>
+      <p>Captures video via the camera module and controls the servo motors through GPIO. The Pi handles all the hardware interactions.</p>
+    </div>
+    <div class="spec-card">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4m0 12v4m8-10h-4M8 12H4m15.07-5.07-2.83 2.83M9.76 14.24l-2.83 2.83m0-10.14 2.83 2.83m4.48 4.48 2.83 2.83"/></svg>
+      </div>
+      <h3>The two servo motors</h3>
+      <p>Two servo motors are mounted on a cardboard bracket so nothings tips over when the motors move.</p>
+    </div>
+    <div class="spec-card">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      </div>
+      <h3>Camera Module</h3>
+      <p>The camera is connected to the Rasperry pi and captures the video</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- WHY PC -->
+<section class="container">
+
+  <h2>Why MediaPipe runs on the PC</h2>
+  <p class="desc">Running MediaPipe hand detection on a separate PC instead of the Raspberry Pi is a important choice in my case.</p>
+
+  <div class="specs" style="grid-template-columns: repeat(2, 1fr);">
+    <div class="spec-card">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M20.66 8A10 10 0 0 0 14 2v6h6.66z" fill="currentColor" opacity="0.3"/></svg>
+      </div>
+      <h3>Heat Management</h3>
+      <p>MediaPipe hand detection is really intensive and generates much heat so running it on the Rasperry PI was not an option in my Case so I had to move MediaPiPe to my much more powerful PC to handle it.</p>
+    </div>
+    <div class="spec-card">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      </div>
+      <h3>Better Performance</h3>
+      <p>My PC has a more powerful CPU, resulting in faster MediaPiPe perfomance. This keeps the frame rate high and steady</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- REPOS -->
+<section id="repositories" class="container">
+  
+  <h2>The 3 Repositories </h2>
+  <p class="desc">The project is split into three repositories.</p>
+
+  <div class="repos">
+    <div class="repo-card">
+      <span class="repo-name">hand_tracker</span>
+      <p>The Repo where the Raspberry Pi captures the video and controls the two servo motors.</p>
+      <a href="https://github.com/javinwittig/hand_tracker" target="_blank" rel="noopener noreferrer" class="repo-link">github.com/javinwittig/hand_tracker &rarr;</a>
+    </div>
+    <div class="repo-card">
+      <span class="repo-name">hantracking_server</span>
+      <p>The server where the frame are sent to, in my case my PC. In this Repo is all the MediaPiPe code.</p>
+      <a href="https://github.com/javinwittig/hantracking_server" target="_blank" rel="noopener noreferrer" class="repo-link">github.com/javinwittig/hantracking_server &rarr;</a>
+    </div>
+    <div class="repo-card">
+      <span class="repo-name">hand_tracker_website</span>
+      <p>This Repo is the project Website, which is hosted on GitHub Pages</p>
+      <a href="https://github.com/javinwittig/hand_tracker_website" target="_blank" rel="noopener noreferrer" class="repo-link">github.com/javinwittig/hand_tracker_website &rarr;</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <p>Hand Tracker </p>
+    <div class="links">
+      <a href="https://github.com/javinwittig/hand_tracker" target="_blank" rel="noopener noreferrer">Pi Client</a>
+      <a href="https://github.com/javinwittig/hantracking_server" target="_blank" rel="noopener noreferrer">Server</a>
+      <a href="https://github.com/javinwittig/hand_tracker_website" target="_blank" rel="noopener noreferrer">Website</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  const v=document.querySelector('.demo video'),
+        btn=document.querySelector('.play-btn'),
+        icon=btn.querySelector('svg'),
+        timeline=document.querySelector('.timeline'),
+        filled=document.querySelector('.timeline .filled'),
+        time=document.querySelector('.time'),
+        playPath='M6,3 L20,12 L6,21Z',
+        pausePath='M6,3 H10 V21 H6Z M14,3 H18 V21 H14Z';
+  function fmt(s){const m=Math.floor(s/60),sec=Math.floor(s%60);return m+':'+(sec<10?'0':'')+sec}
+  function upd(){time.textContent=fmt(v.currentTime)+' / '+fmt(v.duration||0);filled.style.width=(v.duration?(v.currentTime/v.duration*100):0)+'%'}
+  function tog(){v.paused?v.play():v.pause()}
+  v.addEventListener('click',tog);
+  btn.addEventListener('click',e=>{e.stopPropagation();tog()});
+  v.addEventListener('play',()=>icon.innerHTML='<path d="'+pausePath+'"/>');
+  v.addEventListener('pause',()=>icon.innerHTML='<polygon points="6,3 20,12 6,21"/>');
+  v.addEventListener('timeupdate',upd);
+  v.addEventListener('loadedmetadata',upd);
+  timeline.addEventListener('click',e=>{v.currentTime=(e.offsetX/timeline.offsetWidth)*v.duration});
+  let drag=false;
+  timeline.addEventListener('mousedown',e=>{drag=true;v.currentTime=(e.offsetX/timeline.offsetWidth)*v.duration});
+  document.addEventListener('mousemove',e=>{if(drag)v.currentTime=((e.clientX-timeline.getBoundingClientRect().left)/timeline.offsetWidth)*v.duration});
+  document.addEventListener('mouseup',()=>drag=false);
+})();
+</script>
+
+</body>
+</html>

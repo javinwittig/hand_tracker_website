@@ -1,0 +1,11 @@
+# environment
+.env
+.env.production
+
+# editor
+.vscode/
+.idea/
+
+# os
+.DS_Store
+Thumbs.db
